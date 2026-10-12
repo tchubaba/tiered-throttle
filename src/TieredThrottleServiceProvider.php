@@ -6,8 +6,11 @@ namespace Tchubaba\TieredThrottle;
 
 use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
+use Tchubaba\TieredThrottle\Console\Commands\Status;
 use Tchubaba\TieredThrottle\Console\Commands\UnbanIp;
 use Tchubaba\TieredThrottle\Http\Middleware\TieredThrottle;
+use Tchubaba\TieredThrottle\Support\DecisionRepository;
+use Tchubaba\TieredThrottle\Support\ThrottleBypass;
 
 class TieredThrottleServiceProvider extends ServiceProvider
 {
@@ -20,6 +23,11 @@ class TieredThrottleServiceProvider extends ServiceProvider
             __DIR__.'/../config/tiered-throttle.php',
             'tiered-throttle'
         );
+
+        // Singletons so the middleware, the commands and any host code all read
+        // and clear the same set of cache keys.
+        $this->app->singleton(DecisionRepository::class);
+        $this->app->singleton(ThrottleBypass::class);
     }
 
     /**
@@ -34,6 +42,7 @@ class TieredThrottleServiceProvider extends ServiceProvider
 
             $this->commands([
                 UnbanIp::class,
+                Status::class,
             ]);
         }
 

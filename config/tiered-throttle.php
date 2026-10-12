@@ -54,12 +54,68 @@ return [
     |   1. The offense TTL expires naturally (no new offenses during that period).
     |   2. Manual intervention via: php artisan throttle:unban <ip>
     |
-    | ADDING A NEW LIMITER
-    | --------------------
-    | 1. Add an entry here with the desired tiers, lockout_seconds, offense_ttl.
-    | 2. Apply it to a route: ->middleware('tiered.throttle:<limiter-name>')
+    | DEVELOPMENT ESCAPE HATCHES
+    | --------------------------
+    | Two levers stop you tripping the limiter while working locally, without
+    | being able to switch it off on a live host by accident. Both are gated on
+    | the runtime environment being listed in 'bypass_environments' (default:
+    | local, testing).
+    |
+    | That gate is an allowlist on purpose. Application::isProduction() matches
+    | the string 'production' exactly, so a "not production" denylist would treat
+    | 'prod', 'staging' or a typo as non-production and silently drop your rate
+    | limiting. With an allowlist, an unrecognised environment name disables the
+    | bypass, not the limiter.
+    |
+    | The gate is evaluated per request rather than baked into the values below,
+    | so a bootstrap/cache/config.php built on a development machine cannot carry
+    | enabled=false onto a host whose environment is not allowlisted. That is a
+    | backstop, not permission to commit cached config.
+    |
+    | 'enabled'                false switches the middleware off entirely — for
+    |                          load tests or seeding. Prefer 'bypass_ips' for
+    |                          ordinary development: the middleware keeps running
+    |                          for every other IP, so a bug in it cannot hide
+    |                          until production.
+    | 'bypass_ips'             IPs that skip throttling. Gated by
+    |                          'bypass_environments' too, so committing this list
+    |                          cannot exempt an address on a live host. This is a
+    |                          development affordance, not a production allowlist.
+    | 'bypass_private_ranges'  Exempt loopback, RFC1918, link-local and other
+    |                          reserved ranges — including the Docker bridge
+    |                          network, which is the address a container sees for
+    |                          requests from your own machine. Off by default.
+    |
+    | 'testing' is in the default allowlist, so setting TIERED_THROTTLE_ENABLED
+    | to false globally also disables throttling inside your own feature tests.
+    | Assert against enabled=true.
+    |
+    | To see what a given IP is currently subject to:
+    |   php artisan throttle:status <ip>
+    |
+    | It reads the state keys by name, so it behaves the same on every cache
+    | driver. What it does NOT do is list which IPs the store holds: recovering
+    | those means scanning the cache, and scan behaviour varies by driver *and*
+    | by driver version, so a listing would be unreliable on exactly the stores
+    | you are most likely to run. If you need to know which address a request was
+    | keyed on — the usual reason being that a container sees its network gateway
+    | rather than your machine — log the IP from the application instead.
+    |
+    | LIMITER NAMES
+    | -------------
+    | Cache keys are tt_{type}:{limiter}:{ip}, built by plain concatenation, so a
+    | limiter name must not contain a colon: 'a:b' for one IP and 'a' for an IP
+    | starting with 'b:' would produce the same key.
     |
     */
+
+    'enabled'                 => env('TIERED_THROTTLE_ENABLED', true),
+
+    'bypass_ips'              => [],
+
+    'bypass_private_ranges'   => env('TIERED_THROTTLE_BYPASS_PRIVATE_RANGES', false),
+
+    'bypass_environments'     => ['local', 'testing'],
 
     'limiters' => [
 
